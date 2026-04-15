@@ -8,7 +8,7 @@ import java.util.List;
 
 /**
  *
- * @author lewi0146, leib0006
+ * @author lewi0146, leib0006, wick0167
  */
 public class GraphBuilder {
 

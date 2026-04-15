@@ -2,6 +2,11 @@ package solution;
 
 import java.util.HashMap;
 
+/**
+ *
+ * @author wick0167
+ */
+
 public class Graph {
 
     private HashMap<String, Node> graph = new HashMap<>();
