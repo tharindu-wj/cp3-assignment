@@ -113,7 +113,7 @@ public class MyDisasterResponder extends DisasterResponder {
 
         // dispatch a rescue request
         // this will dispatch the next available rescue request. Not always the on that added to the queue above.
-        tryDispatch();
+        processRescueRequest();
     }
 
     /**
@@ -160,7 +160,7 @@ public class MyDisasterResponder extends DisasterResponder {
         vehicleLocation[vehicleNo] = origin;
         vehicleAssignment.remove(vehicleNo);
 
-        tryDispatch();
+        processRescueRequest();
     }
 
     /**
@@ -194,7 +194,7 @@ public class MyDisasterResponder extends DisasterResponder {
     /**
      * Get next pending rescue request and send a vehicle to there
      */
-    private void tryDispatch() {
+    private void processRescueRequest() {
 
         Iterator<String> it = pendingRescues.iterator();
 
