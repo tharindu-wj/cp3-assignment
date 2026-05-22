@@ -117,6 +117,61 @@ public class MyDisasterResponder extends DisasterResponder {
     }
 
     /**
+     * Handle ROAD STATUS
+     *
+     * @param text: ROAD|FROM|location|TO|location|STATUS|status
+     */
+    private void handleRoadStatus(String text){
+
+    }
+
+    /**
+     * Handle LOCATION COLLAPSED
+     *
+     * @param text: LOCATION|location|COLLAPSED
+     */
+    private void handleLocationCollapsed(String text){
+
+    }
+
+    /**
+     * Handle INVALID PATH
+     *
+     * @param text: PATH_INVALID|VEHICLE|vehicleNo|reason
+     */
+    private void handleInvalidPath(String text){
+        // reason = STILL_MOVING
+        // reason = DESTROYED
+        // reason = INVALID_NUMBER
+        // reason = INVALID_STARTING_POINT
+    }
+
+    /**
+     * Handle INVALID WAYPOINT
+     *
+     * @param text: WAYPOINT_INVALID|VEHICLE|vehicleNo|FROM|location|TO|location|ROAD|reason
+     */
+    private void handleInvalidWaypoint(String text){
+        // reason = BLOCKED
+        // reason = NON_EXISTENT
+    }
+
+    /**
+     * Handle VEHICLE ARRIVED
+     * This message confirms that a vehicle has arrived at a particular location on the map
+     *
+     * @param text: VEHICLE|vehicleNo|ARRIVED|LOCATION|locationNo
+     */
+    private void handleVehicleArrived(String text) {
+        String[] parts = text.split("\\|");
+
+        int vehicleNo = Integer.parseInt(parts[1]);
+        String location = parts[4];
+
+        vehicleLocation[vehicleNo] = location;
+    }
+
+    /**
      * Handle VEHICLE HALTED
      * This message is sent when a vehicle halts at a particular location
      *
@@ -139,7 +194,7 @@ public class MyDisasterResponder extends DisasterResponder {
             if (location.equals(assignedRescue)) {
                 // vehicle arrived to assigned rescue location
                 // send back to origin since already picked the people
-                sendVehicle(vehicleNo, location, origin);
+                outboundDispatchVehicle(vehicleNo, location, origin);
 
                 vehicleAssignment.remove(vehicleNo);
             }
@@ -164,21 +219,6 @@ public class MyDisasterResponder extends DisasterResponder {
     }
 
     /**
-     * Handle VEHICLE ARRIVED
-     * This message confirms that a vehicle has arrived at a particular location on the map
-     *
-     * @param text: VEHICLE|vehicleNo|ARRIVED|LOCATION|locationNo
-     */
-    private void handleVehicleArrived(String text) {
-        String[] parts = text.split("\\|");
-
-        int vehicleNo = Integer.parseInt(parts[1]);
-        String location = parts[4];
-
-        vehicleLocation[vehicleNo] = location;
-    }
-
-    /**
      * Handle PEOPLE TRANSFERRED
      * A vehicle has arrived at a rescue location and has picked up the evacuees there
      *
@@ -189,6 +229,16 @@ public class MyDisasterResponder extends DisasterResponder {
 
 
         // TODO::actions need to take
+    }
+
+    /**
+     * Handle VEHICLE DESTROYED
+     *
+     * @param text: VEHICLE|vehicleNo|DESTROYED|LOCATION|locationNo|PEOPLE|noOfPeople
+     */
+    private void handleVehicleDestroyed(String text){
+        // reason = BLOCKED
+        // reason = NON_EXISTENT
     }
 
     /**
@@ -222,7 +272,7 @@ public class MyDisasterResponder extends DisasterResponder {
             // if a vehicle available for the current rescue request
             if (bestVehicle >= 0 && bestDistance < Double.MAX_VALUE) {
                 // send the vehicle
-                sendVehicle(bestVehicle, vehicleLocation[bestVehicle], rescueLocation);
+                outboundDispatchVehicle(bestVehicle, vehicleLocation[bestVehicle], rescueLocation);
                 // assigne vehicle
                 vehicleAssignment.put(bestVehicle, rescueLocation);
                 // remove request from the list
@@ -231,7 +281,14 @@ public class MyDisasterResponder extends DisasterResponder {
         }
     }
 
-    private void sendVehicle(int vehicleNo, String from, String to) {
+    /**
+     * This method send outbound message to the simulator to dispatch a vehicle
+     * PATH REQUEST: PATH|VEHICLE|vehicleNo|WAYPOINTS|wayPoints
+     * @param vehicleNo
+     * @param from
+     * @param to
+     */
+    private void outboundDispatchVehicle(int vehicleNo, String from, String to) {
         // get the shortest path
         List<String> path = pathFinder.shortestPath(from, to);
 
@@ -251,5 +308,14 @@ public class MyDisasterResponder extends DisasterResponder {
         } catch (InterruptedException e) {
             throw new RuntimeException(e);
         }
+    }
+
+    /**
+     * This method send outbound message to the simulator to halt a vehicle
+     * VEHICLE HALT: HALT|VEHICLE|vehicleNo
+     * @param vehicleNo
+     */
+    private void outboundHaltVehicle(int vehicleNo){
+
     }
 }
