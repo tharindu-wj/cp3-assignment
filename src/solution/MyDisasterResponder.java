@@ -304,6 +304,8 @@ public class MyDisasterResponder extends DisasterResponder {
         vehicle.isIdle = true;
         vehicle.currentLocation = origin;
         vehicle.rescueLocation = null;
+        vehicle.isTransporting = false;
+        vehicle.isAwaitingHalt = false;
 
         processRescueRequest();
     }
