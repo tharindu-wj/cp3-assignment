@@ -26,9 +26,6 @@ public class MyDisasterResponder extends DisasterResponder {
     // pending rescue requests that have not dispatched yet
     private List<String> pendingRescues = new ArrayList<>();
 
-    // currently assigned vehicles for rescue
-    private Map<Integer, String> vehicleAssignment = new HashMap<>();
-
     @Override
     protected void setup() {
         // build graph from the map data
@@ -187,15 +184,8 @@ public class MyDisasterResponder extends DisasterResponder {
         // update current location
         vehicle.currentLocation = location;
 
-        // check the halted vehicle is already in a rescue
-        if (location.equals(vehicle.rescueLocation)) {
-
-            // vehicle arrived to assigned rescue location
-            // send back to origin since already picked the people
-            outboundDispatchVehicle(vehicleNo, location, origin);
-
+        if (location.equals(origin)){
             vehicle.rescueLocation = null;
-
         }
     }
 
@@ -274,14 +264,44 @@ public class MyDisasterResponder extends DisasterResponder {
             if (bestVehicle >= 0 && bestDistance < Double.MAX_VALUE) {
                 VehicleState vehicle = vehicleFleet[bestVehicle];
 
-                // send the vehicle
-                outboundDispatchVehicle(bestVehicle, vehicle.currentLocation, rescueLocation);
-                // assigne vehicle
-                vehicle.rescueLocation = rescueLocation;
-                // remove request from the list
-                it.remove();
+                List<String> roundTrip = buildRoundTripWaypoints(vehicle.currentLocation, rescueLocation);
+
+                if (roundTrip != null) {
+                    // send the vehicle
+                    outboundDispatchVehicle(bestVehicle, roundTrip);
+                    // assign vehicle
+                    vehicle.rescueLocation = rescueLocation;
+                    // remove request from the list
+                    it.remove();
+                }
             }
         }
+    }
+
+    /**
+     * Build waypoints  from current location to rescue location and then base location
+     * @param sourceLocation
+     * @param destinationLocation
+     * @return
+     */
+    private List<String> buildRoundTripWaypoints(String sourceLocation, String destinationLocation){
+        List<String> outbound = pathFinder.shortestPath(sourceLocation, destinationLocation);
+
+        if (outbound == null || outbound.isEmpty()) {
+            return null;
+        }
+
+        List<String> back = pathFinder.shortestPath(destinationLocation, origin);
+        if (back == null || back.isEmpty()) {
+            return null;
+        }
+
+        List<String> fullPath = new ArrayList<>(outbound);
+
+        for (int i = 1; i < back.size(); i++) {
+            fullPath.add(back.get(i));
+        }
+        return fullPath;
     }
 
     /**
@@ -289,22 +309,15 @@ public class MyDisasterResponder extends DisasterResponder {
      * PATH REQUEST: PATH|VEHICLE|vehicleNo|WAYPOINTS|wayPoints
      *
      * @param vehicleNo
-     * @param from
-     * @param to
+     * @param waypoints
      */
-    private void outboundDispatchVehicle(int vehicleNo, String from, String to) {
-        // get the shortest path
-        List<String> path = pathFinder.shortestPath(from, to);
-
-        // if no existing paths
-        if (path == null || path.isEmpty()) {
+    private void outboundDispatchVehicle(int vehicleNo, List<String> waypoints) {
+        if (waypoints == null || waypoints.size() < 2) {
             return;
         }
 
         // send the vehicle command
-        String waypoints = String.join(",", path);
-        String command = "PATH|VEHICLE|" + vehicleNo + "|WAYPOINTS|" + waypoints;
-
+        String command = "PATH|VEHICLE|" + vehicleNo + "|WAYPOINTS|" + String.join(",", waypoints);
 
         vehicleFleet[vehicleNo].isIdle = false;
         try {
