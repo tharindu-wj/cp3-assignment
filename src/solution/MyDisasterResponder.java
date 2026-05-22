@@ -18,10 +18,10 @@ public class MyDisasterResponder extends DisasterResponder {
 
     private PathFinderDijkstra pathFinder;
 
-    // vehicle tracking
-    private boolean[] vehicleIdle; // if true, vehicle can accept the path
-    private String[] vehicleLocation; // current location of each vehicle
     private int numOfVehicles = ConfigurationInfo.NUMBER_OF_VEHICLES;
+
+    // state records for vehicles
+    private VehicleState[] vehicleFleet;
 
     // pending rescue requests that have not dispatched yet
     private List<String> pendingRescues = new ArrayList<>();
@@ -45,13 +45,11 @@ public class MyDisasterResponder extends DisasterResponder {
 
         // System.out.println("Graph: " + graph.getGraph());
 
-        // initialise vehicles
-        vehicleIdle = new boolean[numOfVehicles];
-        vehicleLocation = new String[numOfVehicles];
+        // initialise vehicles at the base
+        vehicleFleet = new VehicleState[numOfVehicles];
 
         for (int i = 0; i < numOfVehicles; i++) {
-            vehicleIdle[i] = true;
-            vehicleLocation[i] = origin;
+            vehicleFleet[i] = new VehicleState(i, origin);
         }
 
         // System.out.println("Idle vehicles: " + vehicleIdle);
@@ -121,7 +119,7 @@ public class MyDisasterResponder extends DisasterResponder {
      *
      * @param text: ROAD|FROM|location|TO|location|STATUS|status
      */
-    private void handleRoadStatus(String text){
+    private void handleRoadStatus(String text) {
 
     }
 
@@ -130,7 +128,7 @@ public class MyDisasterResponder extends DisasterResponder {
      *
      * @param text: LOCATION|location|COLLAPSED
      */
-    private void handleLocationCollapsed(String text){
+    private void handleLocationCollapsed(String text) {
 
     }
 
@@ -139,7 +137,7 @@ public class MyDisasterResponder extends DisasterResponder {
      *
      * @param text: PATH_INVALID|VEHICLE|vehicleNo|reason
      */
-    private void handleInvalidPath(String text){
+    private void handleInvalidPath(String text) {
         // reason = STILL_MOVING
         // reason = DESTROYED
         // reason = INVALID_NUMBER
@@ -151,7 +149,7 @@ public class MyDisasterResponder extends DisasterResponder {
      *
      * @param text: WAYPOINT_INVALID|VEHICLE|vehicleNo|FROM|location|TO|location|ROAD|reason
      */
-    private void handleInvalidWaypoint(String text){
+    private void handleInvalidWaypoint(String text) {
         // reason = BLOCKED
         // reason = NON_EXISTENT
     }
@@ -168,7 +166,7 @@ public class MyDisasterResponder extends DisasterResponder {
         int vehicleNo = Integer.parseInt(parts[1]);
         String location = parts[4];
 
-        vehicleLocation[vehicleNo] = location;
+        vehicleFleet[vehicleNo].currentLocation = location;
     }
 
     /**
@@ -182,22 +180,22 @@ public class MyDisasterResponder extends DisasterResponder {
         int vehicleNo = Integer.parseInt(parts[1]);
         String location = parts[4];
 
+        VehicleState vehicle = vehicleFleet[vehicleNo];
+
         // put vehicle to idle state
-        vehicleIdle[vehicleNo] = true;
+        vehicle.isIdle = true;
         // update current location
-        vehicleLocation[vehicleNo] = location;
+        vehicle.currentLocation = location;
 
         // check the halted vehicle is already in a rescue
-        if (vehicleAssignment.containsKey(vehicleNo)) {
-            String assignedRescue = vehicleAssignment.get(vehicleNo);
+        if (location.equals(vehicle.rescueLocation)) {
 
-            if (location.equals(assignedRescue)) {
-                // vehicle arrived to assigned rescue location
-                // send back to origin since already picked the people
-                outboundDispatchVehicle(vehicleNo, location, origin);
+            // vehicle arrived to assigned rescue location
+            // send back to origin since already picked the people
+            outboundDispatchVehicle(vehicleNo, location, origin);
 
-                vehicleAssignment.remove(vehicleNo);
-            }
+            vehicle.rescueLocation = null;
+
         }
     }
 
@@ -211,9 +209,11 @@ public class MyDisasterResponder extends DisasterResponder {
         String[] parts = text.split("\\|");
         int vehicleNo = Integer.parseInt(parts[1]);
 
-        vehicleIdle[vehicleNo] = true;
-        vehicleLocation[vehicleNo] = origin;
-        vehicleAssignment.remove(vehicleNo);
+        VehicleState vehicle = vehicleFleet[vehicleNo];
+
+        vehicle.isIdle = true;
+        vehicle.currentLocation = origin;
+        vehicle.rescueLocation = null;
 
         processRescueRequest();
     }
@@ -236,7 +236,7 @@ public class MyDisasterResponder extends DisasterResponder {
      *
      * @param text: VEHICLE|vehicleNo|DESTROYED|LOCATION|locationNo|PEOPLE|noOfPeople
      */
-    private void handleVehicleDestroyed(String text){
+    private void handleVehicleDestroyed(String text) {
         // reason = BLOCKED
         // reason = NON_EXISTENT
     }
@@ -256,10 +256,11 @@ public class MyDisasterResponder extends DisasterResponder {
             int bestVehicle = -1;
             double bestDistance = Double.MAX_VALUE;
             for (int i = 0; i < numOfVehicles; i++) {
-                if (!vehicleIdle[i] || vehicleLocation[i] == null) continue;
+                VehicleState vehicle = vehicleFleet[i];
+                if (!vehicle.isIdle || vehicle.currentLocation == null) continue;
 
-                // find shortest distance form current vehicle location to rescue location
-                double distanceToRescueLocation = pathFinder.shortestDistance(vehicleLocation[i], rescueLocation);
+                // find the shortest distance form current vehicle location to rescue location
+                double distanceToRescueLocation = pathFinder.shortestDistance(vehicle.currentLocation, rescueLocation);
 
                 // check if curretn vehicle is closer to rescue location than previouse best option
                 if (distanceToRescueLocation < bestDistance) {
@@ -271,10 +272,12 @@ public class MyDisasterResponder extends DisasterResponder {
 
             // if a vehicle available for the current rescue request
             if (bestVehicle >= 0 && bestDistance < Double.MAX_VALUE) {
+                VehicleState vehicle = vehicleFleet[bestVehicle];
+
                 // send the vehicle
-                outboundDispatchVehicle(bestVehicle, vehicleLocation[bestVehicle], rescueLocation);
+                outboundDispatchVehicle(bestVehicle, vehicle.currentLocation, rescueLocation);
                 // assigne vehicle
-                vehicleAssignment.put(bestVehicle, rescueLocation);
+                vehicle.rescueLocation = rescueLocation;
                 // remove request from the list
                 it.remove();
             }
@@ -284,6 +287,7 @@ public class MyDisasterResponder extends DisasterResponder {
     /**
      * This method send outbound message to the simulator to dispatch a vehicle
      * PATH REQUEST: PATH|VEHICLE|vehicleNo|WAYPOINTS|wayPoints
+     *
      * @param vehicleNo
      * @param from
      * @param to
@@ -302,7 +306,7 @@ public class MyDisasterResponder extends DisasterResponder {
         String command = "PATH|VEHICLE|" + vehicleNo + "|WAYPOINTS|" + waypoints;
 
 
-        vehicleIdle[vehicleNo] = false;
+        vehicleFleet[vehicleNo].isIdle = false;
         try {
             outMessageQueue.put(new Message(command));
         } catch (InterruptedException e) {
@@ -313,9 +317,10 @@ public class MyDisasterResponder extends DisasterResponder {
     /**
      * This method send outbound message to the simulator to halt a vehicle
      * VEHICLE HALT: HALT|VEHICLE|vehicleNo
+     *
      * @param vehicleNo
      */
-    private void outboundHaltVehicle(int vehicleNo){
+    private void outboundHaltVehicle(int vehicleNo) {
 
     }
 }
