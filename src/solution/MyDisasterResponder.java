@@ -148,6 +148,13 @@ public class MyDisasterResponder extends DisasterResponder {
         // remove edge from the graph
         if ("BLOCKED".equals(status)) {
             graph.removeEdge(from, to);
+
+            // halt and reroute vehicles that still pending to use this edge
+            for (VehicleState vehicle : vehicleFleet) {
+                if (isPathExistEdge(vehicle, from, to)) {
+                    requestHaltForReroute(vehicle);
+                }
+            }
         }
     }
 
@@ -168,6 +175,18 @@ public class MyDisasterResponder extends DisasterResponder {
 
         // remove pending rescues at the collapsedLocations location
         pendingRescues.removeIf(loc -> loc.equals(location));
+
+        // halt and reroute vehicles dertination to or going through this node
+        for (VehicleState vehicle : vehicleFleet) {
+            if (!vehicle.isAlive || vehicle.isIdle) continue;
+
+            if (location.equals(vehicle.rescueLocation) && !vehicle.isTransporting) {
+                vehicle.rescueLocation = null;
+                requestHaltForReroute(vehicle);
+            } else if (isPathExistNode(vehicle, location)) {
+                requestHaltForReroute(vehicle);
+            }
+        }
     }
 
     /**
@@ -211,6 +230,7 @@ public class MyDisasterResponder extends DisasterResponder {
 
         vehicle.currentLocation = from;
         vehicle.isIdle = true;
+        vehicle.isAwaitingHalt = false;
 
         graph.removeEdge(from, to);
         reRoute(vehicle);
@@ -228,7 +248,8 @@ public class MyDisasterResponder extends DisasterResponder {
         int vehicleNo = Integer.parseInt(parts[1]);
         String location = parts[4];
 
-        vehicleFleet[vehicleNo].currentLocation = location;
+        VehicleState vehicle = vehicleFleet[vehicleNo];
+        vehicle.currentLocation = location;
     }
 
     /**
@@ -248,6 +269,12 @@ public class MyDisasterResponder extends DisasterResponder {
         vehicle.isIdle = true;
         // update current location
         vehicle.currentLocation = location;
+
+        if (vehicle.isAwaitingHalt) {
+            vehicle.isAwaitingHalt = false;
+            reRoute(vehicle);
+            return;
+        }
 
         if (location.equals(origin)){
             vehicle.rescueLocation = null;
@@ -446,7 +473,11 @@ public class MyDisasterResponder extends DisasterResponder {
         // send the vehicle command
         String command = "PATH|VEHICLE|" + vehicleNo + "|WAYPOINTS|" + String.join(",", waypoints);
 
-        vehicleFleet[vehicleNo].isIdle = false;
+        VehicleState vehicle = vehicleFleet[vehicleNo];
+        vehicle.isIdle = false;
+        vehicle.isAwaitingHalt = false;
+        vehicle.plannedPath = waypoints;
+
         try {
             outMessageQueue.put(new Message(command));
         } catch (InterruptedException e) {
@@ -461,6 +492,55 @@ public class MyDisasterResponder extends DisasterResponder {
      * @param vehicleNo
      */
     private void outboundHaltVehicle(int vehicleNo) {
+        String command = "HALT|VEHICLE|" + vehicleNo;
+        try {
+            outMessageQueue.put(new Message(command));
+        } catch (InterruptedException e) {
+            throw new RuntimeException(e);
+        }
+    }
 
+    /**
+     *
+     * @param vehicle
+     */
+    private void requestHaltForReroute(VehicleState vehicle) {
+        if (!vehicle.isAlive || vehicle.isIdle || vehicle.isAwaitingHalt) return;
+        vehicle.isAwaitingHalt = true;
+        outboundHaltVehicle(vehicle.id);
+    }
+
+
+    /**
+     * Check if the edge exist in the given path
+     *
+     * @param vehicle
+     * @param from
+     * @param to
+     * @return
+     */
+    private boolean isPathExistEdge(VehicleState vehicle, String from, String to) {
+        List<String> path = vehicle.plannedPath;
+        if (path == null) return false;
+        for (int i = 0; i + 1 < path.size(); i++) {
+            if (path.get(i).equals(from) && path.get(i + 1).equals(to)) return true;
+        }
+        return false;
+    }
+
+    /**
+     * Check if the node exist in the given path
+     *
+     * @param vehicle
+     * @param node
+     * @return
+     */
+    private boolean isPathExistNode(VehicleState vehicle, String node) {
+        List<String> path = vehicle.plannedPath;
+        if (path == null) return false;
+        for (int i = 0; i < path.size(); i++) {
+            if (path.get(i).equals(node)) return true;
+        }
+        return false;
     }
 }
