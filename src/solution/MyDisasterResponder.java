@@ -29,6 +29,10 @@ public class MyDisasterResponder extends DisasterResponder {
     // location are collapsedLocations
     private Set<String> collapsedLocations = new HashSet<>();
 
+    // for calcualate rescue feasibility
+    private long rescueDurationTicks;
+    private double vehicleSpeed;
+
     @Override
     protected void setup() {
         // build graph from the map data
@@ -56,6 +60,10 @@ public class MyDisasterResponder extends DisasterResponder {
 
         // initialize our PathFinder
         pathFinder = new PathFinderDijkstra(graph);
+
+        Properties cfg = ConfigurationInfo.loadConfig(configFile);
+        rescueDurationTicks = parseLong(cfg.getProperty("RESCUE_DURATION", "0"), 0) * 1000L;
+        vehicleSpeed = parseDouble(cfg.getProperty("VEHICLE_SPEED", "0.2"), 0.2);
 
         // List<String> path = pathFinder.shortestPath("1", "8");
         // System.out.println("shortest path: " + path);
@@ -400,6 +408,11 @@ public class MyDisasterResponder extends DisasterResponder {
             int bestVehicle = -1;
             double bestDistance = Double.MAX_VALUE;
             for (int i = 0; i < numOfVehicles; i++) {
+                // best vehicle cannot reach before the deadline
+                if (!isPickupWithinDeadline(bestDistance)) {
+                    continue;
+                }
+
                 VehicleState vehicle = vehicleFleet[i];
                 if (!vehicle.isAlive || !vehicle.isIdle || vehicle.currentLocation == null) continue;
 
@@ -542,5 +555,33 @@ public class MyDisasterResponder extends DisasterResponder {
             if (path.get(i).equals(node)) return true;
         }
         return false;
+    }
+
+    /**
+     * Calculate if the rescue can be done before the deadline
+     *
+     * @param oneWayDistance
+     * @return
+     */
+    private boolean isPickupWithinDeadline(double oneWayDistance) {
+        if (rescueDurationTicks <= 0) return true;
+        double travelTicks = oneWayDistance / vehicleSpeed;
+        return travelTicks <= rescueDurationTicks;
+    }
+
+    private static long parseLong(String value, long fallback) {
+        try {
+            return Long.parseLong(value.trim());
+        } catch (NumberFormatException | NullPointerException e) {
+            return fallback;
+        }
+    }
+
+    private static double parseDouble(String value, double fallback) {
+        try {
+            return Double.parseDouble(value.trim());
+        } catch (NumberFormatException | NullPointerException e) {
+            return fallback;
+        }
     }
 }
