@@ -26,6 +26,9 @@ public class MyDisasterResponder extends DisasterResponder {
     // pending rescue requests that have not dispatched yet
     private List<String> pendingRescues = new ArrayList<>();
 
+    // location are collapsedLocations
+    private Set<String> collapsedLocations = new HashSet<>();
+
     @Override
     protected void setup() {
         // build graph from the map data
@@ -73,6 +76,26 @@ public class MyDisasterResponder extends DisasterResponder {
         if (text.startsWith("RESCUE|")) {
             handleRescue(text);
         }
+        // ROAD|FROM|location|TO|location|STATUS|status
+        else if (text.startsWith("ROAD|")) {
+            handleRoadStatus(text);
+        }
+        // LOCATION|location|COLLAPSED
+        else if (text.startsWith("LOCATION|")) {
+            handleLocationCollapsed(text);
+        }
+        // WAYPOINT_INVALID|VEHICLE|vehicleNo|FROM|location|TO|location|ROAD|reason
+        else if (text.startsWith("WAYPOINT_INVALID|")) {
+            handleInvalidWaypoint(text);
+        }
+        // PATH_INVALID|VEHICLE|vehicleNo|reason
+        else if (text.startsWith("PATH_INVALID|")) {
+            handleInvalidPath(text);
+        }
+        // PEOPLE_TRANSFERRED|LOCATION|location|VEHICLE|vehicleNo|PEOPLE|noOfPeople
+        else if (text.startsWith("PEOPLE_TRANSFERRED|")) {
+            handlePeopleTransferred(text);
+        }
         // VEHICLE|vehicleNo|HALTED|LOCATION|locationNo
         else if (text.startsWith("VEHICLE|") && text.contains("|HALTED|")) {
             handleVehicleHalted(text);
@@ -85,9 +108,9 @@ public class MyDisasterResponder extends DisasterResponder {
         else if (text.startsWith("VEHICLE|") && text.contains("|ARRIVED|")) {
             handleVehicleArrived(text);
         }
-        // PEOPLE_TRANSFERRED|LOCATION|location|VEHICLE|vehicleNo|PEOPLE|noOfPeople
-        else if (text.startsWith("PEOPLE_TRANSFERRED|")) {
-            handlePeopleTransferred(text);
+        // VEHICLE|vehicleNo|DESTROYED|LOCATION|locationNo|PEOPLE|noOfPeople
+        else if (text.startsWith("VEHICLE|") && text.contains("|DESTROYED|")) {
+            handleVehicleDestroyed(text);
         }
     }
 
@@ -117,7 +140,15 @@ public class MyDisasterResponder extends DisasterResponder {
      * @param text: ROAD|FROM|location|TO|location|STATUS|status
      */
     private void handleRoadStatus(String text) {
+        String[] parts = text.split("\\|");
+        String from = parts[2];
+        String to = parts[4];
+        String status = parts[6];
 
+        // remove edge from the graph
+        if ("BLOCKED".equals(status)) {
+            graph.removeEdge(from, to);
+        }
     }
 
     /**
@@ -126,7 +157,17 @@ public class MyDisasterResponder extends DisasterResponder {
      * @param text: LOCATION|location|COLLAPSED
      */
     private void handleLocationCollapsed(String text) {
+        String[] parts = text.split("\\|");
+        String location = parts[1];
 
+        // remove node for the location
+        graph.removeNode(location);
+
+        // add collapsedLocations location to the list
+        collapsedLocations.add(location);
+
+        // remove pending rescues at the collapsedLocations location
+        pendingRescues.removeIf(loc -> loc.equals(location));
     }
 
     /**
@@ -135,10 +176,21 @@ public class MyDisasterResponder extends DisasterResponder {
      * @param text: PATH_INVALID|VEHICLE|vehicleNo|reason
      */
     private void handleInvalidPath(String text) {
-        // reason = STILL_MOVING
-        // reason = DESTROYED
-        // reason = INVALID_NUMBER
-        // reason = INVALID_STARTING_POINT
+        String[] parts = text.split("\\|");
+        int vehicleNo = Integer.parseInt(parts[2]);
+        String reason = parts[3];
+
+        VehicleState vehicle = vehicleFleet[vehicleNo];
+
+        if ("DESTROYED".equals(reason)) {
+            // reason = DESTROYED
+            markVehicleDead(vehicle);
+        }else {
+            // reason = STILL_MOVING
+            // reason = INVALID_NUMBER
+            // reason = INVALID_STARTING_POINT
+            System.err.println("PATH_INVALID for vehicle " + vehicleNo + ": " + reason);
+        }
     }
 
     /**
@@ -149,6 +201,19 @@ public class MyDisasterResponder extends DisasterResponder {
     private void handleInvalidWaypoint(String text) {
         // reason = BLOCKED
         // reason = NON_EXISTENT
+
+        String[] parts = text.split("\\|");
+        int vehicleNo = Integer.parseInt(parts[2]);
+        String from = parts[4];
+        String to = parts[6];
+
+        VehicleState vehicle = vehicleFleet[vehicleNo];
+
+        vehicle.currentLocation = from;
+        vehicle.isIdle = true;
+
+        graph.removeEdge(from, to);
+        reRoute(vehicle);
     }
 
     /**
@@ -215,10 +280,11 @@ public class MyDisasterResponder extends DisasterResponder {
      * @param text: PEOPLE_TRANSFERRED|LOCATION|location|VEHICLE|vehicleNo|PEOPLE|noOfPeople
      */
     private void handlePeopleTransferred(String text) {
-        // String[] parts = text.split("\\|");
+        String[] parts = text.split("\\|");
+        int vehicleNo = Integer.parseInt(parts[4]);
 
-
-        // TODO::actions need to take
+        // people onboarded this vehicle
+        vehicleFleet[vehicleNo].isTransporting = true;
     }
 
     /**
@@ -229,6 +295,67 @@ public class MyDisasterResponder extends DisasterResponder {
     private void handleVehicleDestroyed(String text) {
         // reason = BLOCKED
         // reason = NON_EXISTENT
+        String[] parts = text.split("\\|");
+        int vehicleNo = Integer.parseInt(parts[1]);
+        markVehicleDead(vehicleFleet[vehicleNo]);
+    }
+
+    /**
+     * recompute path for a vehicle when stopped at the current location
+     * @param vehicle
+     */
+    private void reRoute(VehicleState vehicle) {
+        if (!vehicle.isAlive) return;
+
+        // continue again if the path is still avaialble
+        if (vehicle.rescueLocation != null && !vehicle.isTransporting && !collapsedLocations.contains(vehicle.rescueLocation)) {
+            List<String> roundTrip = buildRoundTripWaypoints(vehicle.currentLocation, vehicle.rescueLocation);
+
+            if (roundTrip != null) {
+                outboundDispatchVehicle(vehicle.id, roundTrip);
+                return;
+            }
+            // cannot reach the pickup now
+            // put to pending rescues
+            requeueRescue(vehicle.rescueLocation);
+            vehicle.rescueLocation = null;
+        }
+
+        // back to the base when path is not available
+        List<String> toBase = pathFinder.shortestPath(vehicle.currentLocation, origin);
+        if (toBase != null && toBase.size() >= 2) {
+            outboundDispatchVehicle(vehicle.id, toBase);
+        } else if (vehicle.currentLocation.equals(origin)) {
+            vehicle.isIdle = true;
+        }
+
+        processRescueRequest();
+    }
+
+    /**
+     *
+     * @param vehicle
+     */
+    private void markVehicleDead(VehicleState vehicle){
+        vehicle.isAlive = false;
+        vehicle.isIdle = false;
+        if (vehicle.rescueLocation != null && !vehicle.isTransporting) {
+            requeueRescue(vehicle.rescueLocation); // the people are still waiting there
+        }
+        vehicle.rescueLocation = null;
+        vehicle.isTransporting = false;
+        processRescueRequest();
+    }
+
+    /**
+     *
+     * @param location
+     */
+    private void requeueRescue(String location) {
+        if (location == null || collapsedLocations.contains(location)) return;
+        if (!pendingRescues.contains(location)) {
+            pendingRescues.add(location);
+        }
     }
 
     /**
@@ -247,7 +374,7 @@ public class MyDisasterResponder extends DisasterResponder {
             double bestDistance = Double.MAX_VALUE;
             for (int i = 0; i < numOfVehicles; i++) {
                 VehicleState vehicle = vehicleFleet[i];
-                if (!vehicle.isIdle || vehicle.currentLocation == null) continue;
+                if (!vehicle.isAlive || !vehicle.isIdle || vehicle.currentLocation == null) continue;
 
                 // find the shortest distance form current vehicle location to rescue location
                 double distanceToRescueLocation = pathFinder.shortestDistance(vehicle.currentLocation, rescueLocation);
