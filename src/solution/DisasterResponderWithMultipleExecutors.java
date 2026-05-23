@@ -4,6 +4,8 @@ import org.jdom2.JDOMException;
 import sim.Message;
 
 import java.io.IOException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 /**
  *
@@ -11,8 +13,12 @@ import java.io.IOException;
  *
  */
 
-public class DisasterResponderSequential extends DisasterResponder {
+public class DisasterResponderWithMultipleExecutors extends DisasterResponder {
     private volatile RescueCoordinator rescueCoordinator;
+
+    private final int threadExecutorCount = Math.max(1, Math.min(Runtime.getRuntime().availableProcessors(), 4));
+
+    private ExecutorService[] threadExecutors;
 
     @Override
     protected void setup() {
@@ -42,6 +48,9 @@ public class DisasterResponderSequential extends DisasterResponder {
 
         //
         rescueCoordinator = new RescueCoordinator(dynamicStateManager, pathPlanner, simulatorGateway, parameters);
+
+        //
+        threadExecutors = newThreadExecutors(threadExecutorCount);
     }
 
     /**
@@ -51,7 +60,67 @@ public class DisasterResponderSequential extends DisasterResponder {
      */
     @Override
     protected void handle(Message s) {
-        executor.submit(() -> route(s.text));
+        String text = s.text;
+
+        int vehicleNo = extractVehicleId(text);
+
+        if (vehicleNo >= 0) {
+            threadExecutors[vehicleNo % threadExecutorCount].submit(() -> worker(text));
+        } else {
+            executor.submit(() -> worker(text));
+        }
+    }
+
+    /**
+     * Extract vehicle id from a given message text
+     * @param text
+     * @return
+     */
+    private int extractVehicleId(String text) {
+        try {
+            // VEHICLE|vehicleNo|
+            if (text.startsWith("VEHICLE|")) {
+                return Integer.parseInt(text.split("\\|")[1]);
+            }
+            // WAYPOINT_INVALID|VEHICLE|vehicleNo|
+            if (text.startsWith("WAYPOINT_INVALID|") || text.startsWith("PATH_INVALID|")) {
+                return Integer.parseInt(text.split("\\|")[2]);
+            }
+            // PEOPLE_TRANSFERRED|LOCATION|location|VEHICLE|vehicleNo|PEOPLE|noOfPeople
+            if (text.startsWith("PEOPLE_TRANSFERRED|")) {
+                return Integer.parseInt(text.split("\\|")[4]);
+            }
+        } catch (Exception e) {
+        }
+        return -1;
+    }
+
+    /**
+     *
+     */
+    @Override
+    public void shutdown() {
+        for (ExecutorService laneExecutor : threadExecutors) {
+            if (laneExecutor != null) {
+                laneExecutor.shutdown();
+            }
+        }
+
+        // base class actions
+        super.shutdown();
+    }
+
+    /**
+     *
+     * @param n
+     * @return
+     */
+    private static ExecutorService[] newThreadExecutors(int n) {
+        ExecutorService[] arr = new ExecutorService[n];
+        for (int i = 0; i < n; i++) {
+            arr[i] = Executors.newSingleThreadExecutor();
+        }
+        return arr;
     }
 
     /**
@@ -59,7 +128,7 @@ public class DisasterResponderSequential extends DisasterResponder {
      * run in the worker thread
      * @param text
      */
-    protected void route(String text) {
+    protected void worker(String text) {
         // Handle each command
 
         try {

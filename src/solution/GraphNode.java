@@ -2,6 +2,7 @@ package solution;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.CopyOnWriteArrayList;
 
 /**
  *
@@ -10,7 +11,7 @@ import java.util.List;
 
 public class GraphNode {
     String id;
-    List<GraphEdge> neighbours = new ArrayList<>();
+    List<GraphEdge> neighbours = new CopyOnWriteArrayList<>();
 
     public GraphNode(String id) {
         this.id = id;

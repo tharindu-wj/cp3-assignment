@@ -10,7 +10,7 @@ import java.util.*;
 
 public class PathFinderDijkstra implements PathFinder {
 
-    private HashMap<String, GraphNode> graph;
+    private Map<String, GraphNode> graph;
 
     public PathFinderDijkstra(Graph graph) {
         this.graph = graph.getGraph();

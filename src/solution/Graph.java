@@ -1,6 +1,8 @@
 package solution;
 
 import java.util.HashMap;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  *
@@ -9,9 +11,9 @@ import java.util.HashMap;
 
 public class Graph {
 
-    private HashMap<String, GraphNode> graph = new HashMap<>();
+    private final Map<String, GraphNode> graph = new ConcurrentHashMap<>();
 
-    public HashMap<String, GraphNode> getGraph() {
+    public Map<String, GraphNode> getGraph() {
         return graph;
     }
 
