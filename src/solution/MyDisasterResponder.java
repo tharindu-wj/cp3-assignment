@@ -4,7 +4,6 @@ import org.jdom2.JDOMException;
 import sim.Message;
 
 import java.io.IOException;
-import java.util.*;
 
 /**
  *
@@ -16,7 +15,7 @@ public class MyDisasterResponder extends DisasterResponder {
 
     @Override
     protected void setup() {
-        SimulatorParameters parameters = SimulatorParameters.fromConfig(configFile);
+        SimulatorStaticParameters parameters = SimulatorStaticParameters.fromConfig(configFile);
 
         Graph graph;
 
@@ -31,7 +30,7 @@ public class MyDisasterResponder extends DisasterResponder {
         // System.out.println("Graph: " + graph.getGraph());
 
         //
-        MapState mapState = new MapState(graph, parameters);
+        DynamicStateManager dynamicStateManager = new DynamicStateManager(graph, parameters);
 
         //
         PathPlanner pathPlanner = new PathPlanner(new PathFinderDijkstra(graph), parameters.getBaseLocation());
@@ -40,7 +39,7 @@ public class MyDisasterResponder extends DisasterResponder {
         SimulatorGateway simulatorGateway = new SimulatorGateway(outMessageQueue);
 
         //
-        rescueCoordinator = new RescueCoordinator(mapState, pathPlanner, simulatorGateway, parameters);
+        rescueCoordinator = new RescueCoordinator(dynamicStateManager, pathPlanner, simulatorGateway, parameters);
 
     }
 

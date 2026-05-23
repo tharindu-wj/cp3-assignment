@@ -7,14 +7,14 @@ import java.util.*;
  * this holds live road graph, vehicle fleet, pending resuces
  */
 
-public class MapState {
+public class DynamicStateManager {
     private final Graph graph;
     private final List<VehicleState> fleet;
     private final List<VehicleState> fleetView;
     private final List<String> pendingRescues = new ArrayList<>();
     private final Set<String> collapsedLocations = new HashSet<>();
 
-    public MapState(Graph graph, SimulatorParameters parameters) {
+    public DynamicStateManager(Graph graph, SimulatorStaticParameters parameters) {
         this.graph = graph;
 
         List<VehicleState> vehicles = new ArrayList<>();

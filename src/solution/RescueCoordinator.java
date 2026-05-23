@@ -2,14 +2,18 @@ package solution;
 
 import java.util.List;
 
+/**
+ *
+ */
+
 public class RescueCoordinator {
-    private final MapState mapState;
+    private final DynamicStateManager dynamicStateManager;
     private final PathPlanner pathPlanner;
     private final SimulatorGateway simulatorGateway;
-    private final SimulatorParameters parameters;
+    private final SimulatorStaticParameters parameters;
 
-    public RescueCoordinator(MapState mapState, PathPlanner pathPlanner, SimulatorGateway simulatorGateway, SimulatorParameters parameters) {
-        this.mapState = mapState;
+    public RescueCoordinator(DynamicStateManager dynamicStateManager, PathPlanner pathPlanner, SimulatorGateway simulatorGateway, SimulatorStaticParameters parameters) {
+        this.dynamicStateManager = dynamicStateManager;
         this.pathPlanner = pathPlanner;
         this.simulatorGateway = simulatorGateway;
         this.parameters = parameters;
@@ -17,16 +21,16 @@ public class RescueCoordinator {
 
     // actions for RESCUE request
     public void onRescueRequest(String location) {
-        if (!mapState.isCollapsed(location)) {
-            mapState.addPendingRescue(location);
+        if (!dynamicStateManager.isCollapsed(location)) {
+            dynamicStateManager.addPendingRescue(location);
         }
         processRescueRequest();
     }
 
     // actions for ROAD BLOCKED
     public void onRoadBlocked(String from, String to) {
-        mapState.blockRoad(from, to);
-        for (VehicleState vehicle : mapState.getVehicleFleet()) {
+        dynamicStateManager.blockRoad(from, to);
+        for (VehicleState vehicle : dynamicStateManager.getVehicleFleet()) {
             if (pathPlanner.isPathExistEdge(vehicle.plannedPath, from, to)) {
                 requestHaltForReroute(vehicle);
             }
@@ -35,10 +39,10 @@ public class RescueCoordinator {
 
     // actions for LOCATION COLLAPSED
     public void onLocationCollapsed(String location) {
-        mapState.collapseLocation(location);
-        mapState.removePendingRescuesByLocation(location);
+        dynamicStateManager.collapseLocation(location);
+        dynamicStateManager.removePendingRescuesByLocation(location);
 
-        for (VehicleState vehicle : mapState.getVehicleFleet()) {
+        for (VehicleState vehicle : dynamicStateManager.getVehicleFleet()) {
             if (!vehicle.isAlive || vehicle.isIdle) continue;
 
             if (location.equals(vehicle.rescueLocation) && !vehicle.isTransporting) {
@@ -52,19 +56,19 @@ public class RescueCoordinator {
 
     // actions for INVALID PATH
     public void onWaypointInvalid(int vehicleNo, String from, String to) {
-        VehicleState vehicle = mapState.getVehicleFromFleet(vehicleNo);
+        VehicleState vehicle = dynamicStateManager.getVehicleFromFleet(vehicleNo);
 
         vehicle.currentLocation = from;
         vehicle.isIdle = true;
         vehicle.isAwaitingHalt = false;
 
-        mapState.blockRoad(from, to);
+        dynamicStateManager.blockRoad(from, to);
         reRoute(vehicle);
     }
 
     // actions for INVALID PATH
     public void onPathInvalid(int vehicleNo, String reason) {
-        VehicleState vehicle = mapState.getVehicleFromFleet(vehicleNo);
+        VehicleState vehicle = dynamicStateManager.getVehicleFromFleet(vehicleNo);
 
         if ("DESTROYED".equals(reason)) {
             markVehicleDead(vehicle);
@@ -75,12 +79,12 @@ public class RescueCoordinator {
 
     // actions for VEHICLE ARRIVED
     public void onVehicleArrived(int vehicleNo, String location) {
-        mapState.getVehicleFromFleet(vehicleNo).currentLocation = location;
+        dynamicStateManager.getVehicleFromFleet(vehicleNo).currentLocation = location;
     }
 
     // actions for VEHICLE HALTED
     public void onVehicleHalted(int vehicleNo, String location) {
-        VehicleState vehicle = mapState.getVehicleFromFleet(vehicleNo);
+        VehicleState vehicle = dynamicStateManager.getVehicleFromFleet(vehicleNo);
 
         vehicle.isIdle = true;
         vehicle.currentLocation = location;
@@ -98,7 +102,7 @@ public class RescueCoordinator {
 
     // actions for VEHICLE RETURNED
     public void onVehicleReturned(int vehicleNo) {
-        VehicleState vehicle = mapState.getVehicleFromFleet(vehicleNo);
+        VehicleState vehicle = dynamicStateManager.getVehicleFromFleet(vehicleNo);
 
         vehicle.isIdle = true;
         vehicle.currentLocation = parameters.getBaseLocation();
@@ -111,12 +115,12 @@ public class RescueCoordinator {
 
     // actions for PEOPLE TRANSFERRED
     public void onPeopleTransferred(int vehicleNo) {
-        mapState.getVehicleFromFleet(vehicleNo).isTransporting = true;
+        dynamicStateManager.getVehicleFromFleet(vehicleNo).isTransporting = true;
     }
 
     // actions for VEHICLE DESTROYED
     public void onVehicleDestroyed(int vehicleNo) {
-        markVehicleDead(mapState.getVehicleFromFleet(vehicleNo));
+        markVehicleDead(dynamicStateManager.getVehicleFromFleet(vehicleNo));
     }
 
     /**
@@ -127,7 +131,7 @@ public class RescueCoordinator {
         if (!vehicle.isAlive) return;
 
         // continue again if the path is still avaialble
-        if (vehicle.rescueLocation != null && !vehicle.isTransporting && !mapState.isCollapsed(vehicle.rescueLocation)) {
+        if (vehicle.rescueLocation != null && !vehicle.isTransporting && !dynamicStateManager.isCollapsed(vehicle.rescueLocation)) {
             List<String> roundTrip = pathPlanner.buildRoundTripWaypoints(vehicle.currentLocation, vehicle.rescueLocation);
             if (roundTrip != null) {
                 dispatch(vehicle.id, roundTrip);
@@ -171,9 +175,9 @@ public class RescueCoordinator {
      * @param location
      */
     private void requeueRescue(String location) {
-        if (location == null || mapState.isCollapsed(location)) return;
-        if (!mapState.hasPendingRescue(location)) {
-            mapState.addPendingRescue(location);
+        if (location == null || dynamicStateManager.isCollapsed(location)) return;
+        if (!dynamicStateManager.hasPendingRescue(location)) {
+            dynamicStateManager.addPendingRescue(location);
         }
     }
 
@@ -181,12 +185,12 @@ public class RescueCoordinator {
      * Get next pending rescue request and send a vehicle to there
      */
     private void processRescueRequest() {
-        for (String rescueLocation : mapState.allRescuesList()) {
+        for (String rescueLocation : dynamicStateManager.allRescuesList()) {
 
             // find closet idle vehicle to the rescue location
             int bestVehicle = -1;
             double bestDistance = Double.MAX_VALUE;
-            for (VehicleState vehicle : mapState.getVehicleFleet()) {
+            for (VehicleState vehicle : dynamicStateManager.getVehicleFleet()) {
                 if (!vehicle.isAlive || !vehicle.isIdle || vehicle.currentLocation == null) continue;
 
                 double distanceToRescueLocation = pathPlanner.distance(vehicle.currentLocation, rescueLocation);
@@ -198,13 +202,13 @@ public class RescueCoordinator {
 
             // send vehicle only when vehicle can reach th location before the deadline
             if (bestVehicle >= 0 && bestDistance < Double.MAX_VALUE && isPickupWithinDeadline(bestDistance)) {
-                VehicleState vehicle = mapState.getVehicleFromFleet(bestVehicle);
+                VehicleState vehicle = dynamicStateManager.getVehicleFromFleet(bestVehicle);
 
                 List<String> roundTrip = pathPlanner.buildRoundTripWaypoints(vehicle.currentLocation, rescueLocation);
                 if (roundTrip != null) {
                     dispatch(bestVehicle, roundTrip);
                     vehicle.rescueLocation = rescueLocation;
-                    mapState.removePendingRescuesByLocation(rescueLocation);
+                    dynamicStateManager.removePendingRescuesByLocation(rescueLocation);
                 }
             }
         }
@@ -220,7 +224,7 @@ public class RescueCoordinator {
         if (waypoints == null || waypoints.size() < 2) {
             return;
         }
-        VehicleState vehicle = mapState.getVehicleFromFleet(vehicleNo);
+        VehicleState vehicle = dynamicStateManager.getVehicleFromFleet(vehicleNo);
         vehicle.isIdle = false;
         vehicle.isAwaitingHalt = false;
         vehicle.plannedPath = waypoints;

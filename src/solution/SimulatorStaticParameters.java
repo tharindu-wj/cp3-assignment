@@ -8,14 +8,14 @@ import java.util.Properties;
  * Static parameters for the simulator
  */
 
-public class SimulatorParameters {
+public class SimulatorStaticParameters {
     private final String mapFile;
     private final String base;
     private final int numberOfVehicles;
     private final long rescueDurationTicks;
     private final double vehicleSpeed;
 
-    private SimulatorParameters(String mapFile, String base, int numberOfVehicles, long rescueDurationTicks, double vehicleSpeed) {
+    private SimulatorStaticParameters(String mapFile, String base, int numberOfVehicles, long rescueDurationTicks, double vehicleSpeed) {
         this.mapFile = mapFile;
         this.base = base;
         this.numberOfVehicles = numberOfVehicles;
@@ -24,7 +24,7 @@ public class SimulatorParameters {
     }
 
     // build parameters from the config
-    public static SimulatorParameters fromConfig(String configFile) {
+    public static SimulatorStaticParameters fromConfig(String configFile) {
         String mapFile = ConfigurationInfo.getMapFile(configFile);
         String base = ConfigurationInfo.getOrigin(configFile);
         int numberOfVehicles = ConfigurationInfo.NUMBER_OF_VEHICLES;
@@ -33,7 +33,7 @@ public class SimulatorParameters {
         long rescueDurationTicks = parseLong(cfg.getProperty("RESCUE_DURATION", "0"), 0) * 1000L;
         double vehicleSpeed = parseDouble(cfg.getProperty("VEHICLE_SPEED", "0.2"), 0.2);
 
-        return new SimulatorParameters(mapFile, base, numberOfVehicles, rescueDurationTicks, vehicleSpeed);
+        return new SimulatorStaticParameters(mapFile, base, numberOfVehicles, rescueDurationTicks, vehicleSpeed);
     }
 
     public String getMapFile() {
