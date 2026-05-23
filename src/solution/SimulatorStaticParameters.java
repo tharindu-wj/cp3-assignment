@@ -5,7 +5,7 @@ import util.ConfigurationInfo;
 import java.util.Properties;
 
 /**
- * Static parameters for the simulator
+ * Access static parameters from the simulator
  */
 
 public class SimulatorStaticParameters {

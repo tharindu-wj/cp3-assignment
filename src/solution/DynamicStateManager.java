@@ -3,7 +3,7 @@ package solution;
 import java.util.*;
 
 /**
- * class to track live status changes of the overall situation
+ * class to track live status changes of the overall simulator context
  * this holds live road graph, vehicle fleet, pending resuces
  */
 

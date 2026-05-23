@@ -8,11 +8,11 @@ import java.util.List;
  * @author wick0167
  */
 
-public class Node {
+public class GraphNode {
     String id;
-    List<Edge> neighbours = new ArrayList<>();
+    List<GraphEdge> neighbours = new ArrayList<>();
 
-    public Node(String id) {
+    public GraphNode(String id) {
         this.id = id;
     }
 }

@@ -10,7 +10,7 @@ import java.util.*;
 
 public class PathFinderDijkstra implements PathFinder {
 
-    private HashMap<String, Node> graph;
+    private HashMap<String, GraphNode> graph;
 
     public PathFinderDijkstra(Graph graph) {
         this.graph = graph.getGraph();
@@ -51,10 +51,10 @@ public class PathFinderDijkstra implements PathFinder {
 
             if (known.contains(node)) continue;
             known.add(node);
-            Node nodeObj = graph.get(node);
+            GraphNode nodeObj = graph.get(node);
 
             if (nodeObj == null) continue;
-            for (Edge edge : nodeObj.neighbours) {
+            for (GraphEdge edge : nodeObj.neighbours) {
                 String neighbour = edge.to;
                 if (known.contains(neighbour)) continue;
                 double newDist = distance.get(node) + edge.weight;
