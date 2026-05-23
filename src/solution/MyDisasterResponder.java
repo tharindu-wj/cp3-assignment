@@ -23,6 +23,9 @@ public class MyDisasterResponder extends DisasterResponder {
     // state records for vehicles
     private VehicleState[] vehicleFleet;
 
+    // gateway to send outbound messages to the simulator
+    private SimulatorGateway simulatorGateway;
+
     // pending rescue requests that have not dispatched yet
     private List<String> pendingRescues = new ArrayList<>();
 
@@ -60,6 +63,9 @@ public class MyDisasterResponder extends DisasterResponder {
 
         // initialize our PathFinder
         pathFinder = new PathFinderDijkstra(graph);
+
+        // intilaise outbound message gateway
+        simulatorGateway = new SimulatorGateway(outMessageQueue);
 
         Properties cfg = ConfigurationInfo.loadConfig(configFile);
         rescueDurationTicks = parseLong(cfg.getProperty("RESCUE_DURATION", "0"), 0) * 1000L;
@@ -485,19 +491,12 @@ public class MyDisasterResponder extends DisasterResponder {
             return;
         }
 
-        // send the vehicle command
-        String command = "PATH|VEHICLE|" + vehicleNo + "|WAYPOINTS|" + String.join(",", waypoints);
-
         VehicleState vehicle = vehicleFleet[vehicleNo];
         vehicle.isIdle = false;
         vehicle.isAwaitingHalt = false;
         vehicle.plannedPath = waypoints;
 
-        try {
-            outMessageQueue.put(new Message(command));
-        } catch (InterruptedException e) {
-            throw new RuntimeException(e);
-        }
+        simulatorGateway.sendPath(vehicleNo, waypoints);
     }
 
     /**
@@ -507,12 +506,7 @@ public class MyDisasterResponder extends DisasterResponder {
      * @param vehicleNo
      */
     private void outboundHaltVehicle(int vehicleNo) {
-        String command = "HALT|VEHICLE|" + vehicleNo;
-        try {
-            outMessageQueue.put(new Message(command));
-        } catch (InterruptedException e) {
-            throw new RuntimeException(e);
-        }
+        simulatorGateway.sendHalt(vehicleNo);
     }
 
     /**
