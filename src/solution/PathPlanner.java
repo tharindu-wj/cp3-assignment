@@ -4,10 +4,10 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class PathPlanner {
-    private final PathFinderDijkstra pathFinder;
+    private final PathFinder pathFinder;
     private final String base;
 
-    public PathPlanner(PathFinderDijkstra pathFinder, String base) {
+    public PathPlanner(PathFinder pathFinder, String base) {
         this.pathFinder = pathFinder;
         this.base = base;
     }

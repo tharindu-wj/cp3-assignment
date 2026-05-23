@@ -8,7 +8,7 @@ import java.util.*;
  * @author wick0167
  */
 
-public class PathFinderDijkstra {
+public class PathFinderDijkstra implements PathFinder {
 
     private HashMap<String, Node> graph;
 

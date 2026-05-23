@@ -21,9 +21,6 @@ public class MyDisasterResponder extends DisasterResponder {
     // plan paths for vehicle routing
     private PathPlanner pathPlanner;
 
-    // shortest path algorithm
-    private PathFinderDijkstra pathFinder;
-
     // gateway to send outbound messages to the simulator
     private SimulatorGateway simulatorGateway;
 
@@ -49,14 +46,8 @@ public class MyDisasterResponder extends DisasterResponder {
         //
         pathPlanner = new PathPlanner(new PathFinderDijkstra(graph), parameters.getBaseLocation());
 
-        // initialize our PathFinder
-        pathFinder = new PathFinderDijkstra(graph);
-
         // intilaise outbound message gateway
         simulatorGateway = new SimulatorGateway(outMessageQueue);
-
-        // List<String> path = pathFinder.shortestPath("1", "8");
-        // System.out.println("shortest path: " + path);
     }
 
     /**
@@ -333,7 +324,7 @@ public class MyDisasterResponder extends DisasterResponder {
 
         // continue again if the path is still avaialble
         if (vehicle.rescueLocation != null && !vehicle.isTransporting && !mapState.isCollapsed(vehicle.rescueLocation)) {
-            List<String> roundTrip = buildRoundTripWaypoints(vehicle.currentLocation, vehicle.rescueLocation);
+            List<String> roundTrip = pathPlanner.buildRoundTripWaypoints(vehicle.currentLocation, vehicle.rescueLocation);
 
             if (roundTrip != null) {
                 outboundDispatchVehicle(vehicle.id, roundTrip);
@@ -426,32 +417,6 @@ public class MyDisasterResponder extends DisasterResponder {
                 }
             }
         }
-    }
-
-    /**
-     * Build waypoints  from current location to rescue location and then base location
-     * @param sourceLocation
-     * @param destinationLocation
-     * @return
-     */
-    private List<String> buildRoundTripWaypoints(String sourceLocation, String destinationLocation){
-        List<String> outbound = pathFinder.shortestPath(sourceLocation, destinationLocation);
-
-        if (outbound == null || outbound.isEmpty()) {
-            return null;
-        }
-
-        List<String> back = pathFinder.shortestPath(destinationLocation, parameters.getBaseLocation());
-        if (back == null || back.isEmpty()) {
-            return null;
-        }
-
-        List<String> fullPath = new ArrayList<>(outbound);
-
-        for (int i = 1; i < back.size(); i++) {
-            fullPath.add(back.get(i));
-        }
-        return fullPath;
     }
 
     /**
