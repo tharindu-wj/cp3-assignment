@@ -2,7 +2,6 @@ package solution;
 
 import org.jdom2.JDOMException;
 import sim.Message;
-import util.ConfigurationInfo;
 
 import java.io.IOException;
 import java.util.*;
@@ -13,37 +12,29 @@ import java.util.*;
  */
 
 public class MyDisasterResponder extends DisasterResponder {
-    private Graph graph;
-    private String origin;
+    // static simulator parameters
+    private SimulatorParameters parameters;
 
+    // dynamically changing states
+    private MapState mapState;
+
+    // plan paths for vehicle routing
+    private PathPlanner pathPlanner;
+
+    // shortest path algorithm
     private PathFinderDijkstra pathFinder;
-
-    private int numOfVehicles = ConfigurationInfo.NUMBER_OF_VEHICLES;
-
-    // state records for vehicles
-    private VehicleState[] vehicleFleet;
 
     // gateway to send outbound messages to the simulator
     private SimulatorGateway simulatorGateway;
 
-    // pending rescue requests that have not dispatched yet
-    private List<String> pendingRescues = new ArrayList<>();
-
-    // location are collapsedLocations
-    private Set<String> collapsedLocations = new HashSet<>();
-
-    // for calcualate rescue feasibility
-    private long rescueDurationTicks;
-    private double vehicleSpeed;
-
     @Override
     protected void setup() {
-        // build graph from the map data
-        String mapFile = ConfigurationInfo.getMapFile(configFile);
-        origin = ConfigurationInfo.getOrigin(configFile);
+        parameters = SimulatorParameters.fromConfig(configFile);
+
+        Graph graph;
 
         try {
-            graph = GraphBuilder.buildFromGraphML(mapFile);
+            graph = GraphBuilder.buildFromGraphML(parameters.getMapFile());
         } catch (JDOMException e) {
             throw new RuntimeException(e);
         } catch (IOException e) {
@@ -52,24 +43,17 @@ public class MyDisasterResponder extends DisasterResponder {
 
         // System.out.println("Graph: " + graph.getGraph());
 
-        // initialise vehicles at the base
-        vehicleFleet = new VehicleState[numOfVehicles];
+        //
+        mapState = new MapState(graph, parameters);
 
-        for (int i = 0; i < numOfVehicles; i++) {
-            vehicleFleet[i] = new VehicleState(i, origin);
-        }
-
-        // System.out.println("Idle vehicles: " + vehicleIdle);
+        //
+        pathPlanner = new PathPlanner(new PathFinderDijkstra(graph), parameters.getBaseLocation());
 
         // initialize our PathFinder
         pathFinder = new PathFinderDijkstra(graph);
 
         // intilaise outbound message gateway
         simulatorGateway = new SimulatorGateway(outMessageQueue);
-
-        Properties cfg = ConfigurationInfo.loadConfig(configFile);
-        rescueDurationTicks = parseLong(cfg.getProperty("RESCUE_DURATION", "0"), 0) * 1000L;
-        vehicleSpeed = parseDouble(cfg.getProperty("VEHICLE_SPEED", "0.2"), 0.2);
 
         // List<String> path = pathFinder.shortestPath("1", "8");
         // System.out.println("shortest path: " + path);
@@ -141,7 +125,7 @@ public class MyDisasterResponder extends DisasterResponder {
         String location = parts[2];
 
         // add to rescue list
-        pendingRescues.add(location);
+        mapState.addPendingRescue(location);
 
         // dispatch a rescue request
         // this will dispatch the next available rescue request. Not always the on that added to the queue above.
@@ -161,11 +145,11 @@ public class MyDisasterResponder extends DisasterResponder {
 
         // remove edge from the graph
         if ("BLOCKED".equals(status)) {
-            graph.removeEdge(from, to);
+            mapState.blockRoad(from, to);
 
             // halt and reroute vehicles that still pending to use this edge
-            for (VehicleState vehicle : vehicleFleet) {
-                if (isPathExistEdge(vehicle, from, to)) {
+            for (VehicleState vehicle : mapState.getVehicleFleet()) {
+                if (pathPlanner.isPathExistEdge(vehicle.plannedPath, from, to)) {
                     requestHaltForReroute(vehicle);
                 }
             }
@@ -181,23 +165,20 @@ public class MyDisasterResponder extends DisasterResponder {
         String[] parts = text.split("\\|");
         String location = parts[1];
 
-        // remove node for the location
-        graph.removeNode(location);
-
-        // add collapsedLocations location to the list
-        collapsedLocations.add(location);
+        // add to collapsedLocations locations
+        mapState.collapseLocation(location);
 
         // remove pending rescues at the collapsedLocations location
-        pendingRescues.removeIf(loc -> loc.equals(location));
+        mapState.removePendingRescuesByLocation(location);
 
         // halt and reroute vehicles dertination to or going through this node
-        for (VehicleState vehicle : vehicleFleet) {
+        for (VehicleState vehicle : mapState.getVehicleFleet()) {
             if (!vehicle.isAlive || vehicle.isIdle) continue;
 
             if (location.equals(vehicle.rescueLocation) && !vehicle.isTransporting) {
                 vehicle.rescueLocation = null;
                 requestHaltForReroute(vehicle);
-            } else if (isPathExistNode(vehicle, location)) {
+            } else if (pathPlanner.isPathExistNode(vehicle.plannedPath, location)) {
                 requestHaltForReroute(vehicle);
             }
         }
@@ -213,7 +194,7 @@ public class MyDisasterResponder extends DisasterResponder {
         int vehicleNo = Integer.parseInt(parts[2]);
         String reason = parts[3];
 
-        VehicleState vehicle = vehicleFleet[vehicleNo];
+        VehicleState vehicle = mapState.getVehicleFromFleet(vehicleNo);
 
         if ("DESTROYED".equals(reason)) {
             // reason = DESTROYED
@@ -240,13 +221,13 @@ public class MyDisasterResponder extends DisasterResponder {
         String from = parts[4];
         String to = parts[6];
 
-        VehicleState vehicle = vehicleFleet[vehicleNo];
+        VehicleState vehicle = mapState.getVehicleFromFleet(vehicleNo);
 
         vehicle.currentLocation = from;
         vehicle.isIdle = true;
         vehicle.isAwaitingHalt = false;
 
-        graph.removeEdge(from, to);
+        mapState.blockRoad(from, to);
         reRoute(vehicle);
     }
 
@@ -262,7 +243,7 @@ public class MyDisasterResponder extends DisasterResponder {
         int vehicleNo = Integer.parseInt(parts[1]);
         String location = parts[4];
 
-        VehicleState vehicle = vehicleFleet[vehicleNo];
+        VehicleState vehicle = mapState.getVehicleFromFleet(vehicleNo);
         vehicle.currentLocation = location;
     }
 
@@ -277,7 +258,7 @@ public class MyDisasterResponder extends DisasterResponder {
         int vehicleNo = Integer.parseInt(parts[1]);
         String location = parts[4];
 
-        VehicleState vehicle = vehicleFleet[vehicleNo];
+        VehicleState vehicle = mapState.getVehicleFromFleet(vehicleNo);
 
         // put vehicle to idle state
         vehicle.isIdle = true;
@@ -290,7 +271,7 @@ public class MyDisasterResponder extends DisasterResponder {
             return;
         }
 
-        if (location.equals(origin)){
+        if (location.equals(parameters.getBaseLocation())){
             vehicle.rescueLocation = null;
         }
     }
@@ -305,10 +286,10 @@ public class MyDisasterResponder extends DisasterResponder {
         String[] parts = text.split("\\|");
         int vehicleNo = Integer.parseInt(parts[1]);
 
-        VehicleState vehicle = vehicleFleet[vehicleNo];
+        VehicleState vehicle = mapState.getVehicleFromFleet(vehicleNo);
 
         vehicle.isIdle = true;
-        vehicle.currentLocation = origin;
+        vehicle.currentLocation = parameters.getBaseLocation();
         vehicle.rescueLocation = null;
         vehicle.isTransporting = false;
         vehicle.isAwaitingHalt = false;
@@ -327,7 +308,7 @@ public class MyDisasterResponder extends DisasterResponder {
         int vehicleNo = Integer.parseInt(parts[4]);
 
         // people onboarded this vehicle
-        vehicleFleet[vehicleNo].isTransporting = true;
+        mapState.getVehicleFromFleet(vehicleNo).isTransporting = true;
     }
 
     /**
@@ -340,7 +321,7 @@ public class MyDisasterResponder extends DisasterResponder {
         // reason = NON_EXISTENT
         String[] parts = text.split("\\|");
         int vehicleNo = Integer.parseInt(parts[1]);
-        markVehicleDead(vehicleFleet[vehicleNo]);
+        markVehicleDead(mapState.getVehicleFromFleet(vehicleNo));
     }
 
     /**
@@ -351,7 +332,7 @@ public class MyDisasterResponder extends DisasterResponder {
         if (!vehicle.isAlive) return;
 
         // continue again if the path is still avaialble
-        if (vehicle.rescueLocation != null && !vehicle.isTransporting && !collapsedLocations.contains(vehicle.rescueLocation)) {
+        if (vehicle.rescueLocation != null && !vehicle.isTransporting && !mapState.isCollapsed(vehicle.rescueLocation)) {
             List<String> roundTrip = buildRoundTripWaypoints(vehicle.currentLocation, vehicle.rescueLocation);
 
             if (roundTrip != null) {
@@ -365,10 +346,10 @@ public class MyDisasterResponder extends DisasterResponder {
         }
 
         // back to the base when path is not available
-        List<String> toBase = pathFinder.shortestPath(vehicle.currentLocation, origin);
+        List<String> toBase = pathPlanner.pathToBase(vehicle.currentLocation);
         if (toBase != null && toBase.size() >= 2) {
             outboundDispatchVehicle(vehicle.id, toBase);
-        } else if (vehicle.currentLocation.equals(origin)) {
+        } else if (vehicle.currentLocation.equals(parameters.getBaseLocation())) {
             vehicle.isIdle = true;
         }
 
@@ -395,9 +376,9 @@ public class MyDisasterResponder extends DisasterResponder {
      * @param location
      */
     private void requeueRescue(String location) {
-        if (location == null || collapsedLocations.contains(location)) return;
-        if (!pendingRescues.contains(location)) {
-            pendingRescues.add(location);
+        if (location == null || mapState.isCollapsed(location)) return;
+        if (!mapState.hasPendingRescue(location)) {
+            mapState.addPendingRescue(location);
         }
     }
 
@@ -405,41 +386,35 @@ public class MyDisasterResponder extends DisasterResponder {
      * Get next pending rescue request and send a vehicle to there
      */
     private void processRescueRequest() {
-
-        Iterator<String> it = pendingRescues.iterator();
-
-        while (it.hasNext()) {
-            // get next available pending rescue request location
-            String rescueLocation = it.next();
-
+        for (String rescueLocation : mapState.allRescuesList()) {
             // find closet idle vehicle to the rescue location
             int bestVehicle = -1;
             double bestDistance = Double.MAX_VALUE;
-            for (int i = 0; i < numOfVehicles; i++) {
+
+            for (VehicleState vehicle : mapState.getVehicleFleet()) {
                 // best vehicle cannot reach before the deadline
                 if (!isPickupWithinDeadline(bestDistance)) {
                     continue;
                 }
 
-                VehicleState vehicle = vehicleFleet[i];
                 if (!vehicle.isAlive || !vehicle.isIdle || vehicle.currentLocation == null) continue;
 
                 // find the shortest distance form current vehicle location to rescue location
-                double distanceToRescueLocation = pathFinder.shortestDistance(vehicle.currentLocation, rescueLocation);
+                double distanceToRescueLocation = pathPlanner.distance(vehicle.currentLocation, rescueLocation);
 
                 // check if curretn vehicle is closer to rescue location than previouse best option
                 if (distanceToRescueLocation < bestDistance) {
                     // update current vehicle if it is close to the rescue location
                     bestDistance = distanceToRescueLocation;
-                    bestVehicle = i;
+                    bestVehicle = vehicle.id;
                 }
             }
 
             // if a vehicle available for the current rescue request
             if (bestVehicle >= 0 && bestDistance < Double.MAX_VALUE) {
-                VehicleState vehicle = vehicleFleet[bestVehicle];
+                VehicleState vehicle = mapState.getVehicleFromFleet(bestVehicle);
 
-                List<String> roundTrip = buildRoundTripWaypoints(vehicle.currentLocation, rescueLocation);
+                List<String> roundTrip = pathPlanner.buildRoundTripWaypoints(vehicle.currentLocation, rescueLocation);
 
                 if (roundTrip != null) {
                     // send the vehicle
@@ -447,7 +422,7 @@ public class MyDisasterResponder extends DisasterResponder {
                     // assign vehicle
                     vehicle.rescueLocation = rescueLocation;
                     // remove request from the list
-                    it.remove();
+                    mapState.removePendingRescuesByLocation(rescueLocation);
                 }
             }
         }
@@ -466,7 +441,7 @@ public class MyDisasterResponder extends DisasterResponder {
             return null;
         }
 
-        List<String> back = pathFinder.shortestPath(destinationLocation, origin);
+        List<String> back = pathFinder.shortestPath(destinationLocation, parameters.getBaseLocation());
         if (back == null || back.isEmpty()) {
             return null;
         }
@@ -491,7 +466,7 @@ public class MyDisasterResponder extends DisasterResponder {
             return;
         }
 
-        VehicleState vehicle = vehicleFleet[vehicleNo];
+        VehicleState vehicle = mapState.getVehicleFromFleet(vehicleNo);
         vehicle.isIdle = false;
         vehicle.isAwaitingHalt = false;
         vehicle.plannedPath = waypoints;
@@ -519,40 +494,6 @@ public class MyDisasterResponder extends DisasterResponder {
         outboundHaltVehicle(vehicle.id);
     }
 
-
-    /**
-     * Check if the edge exist in the given path
-     *
-     * @param vehicle
-     * @param from
-     * @param to
-     * @return
-     */
-    private boolean isPathExistEdge(VehicleState vehicle, String from, String to) {
-        List<String> path = vehicle.plannedPath;
-        if (path == null) return false;
-        for (int i = 0; i + 1 < path.size(); i++) {
-            if (path.get(i).equals(from) && path.get(i + 1).equals(to)) return true;
-        }
-        return false;
-    }
-
-    /**
-     * Check if the node exist in the given path
-     *
-     * @param vehicle
-     * @param node
-     * @return
-     */
-    private boolean isPathExistNode(VehicleState vehicle, String node) {
-        List<String> path = vehicle.plannedPath;
-        if (path == null) return false;
-        for (int i = 0; i < path.size(); i++) {
-            if (path.get(i).equals(node)) return true;
-        }
-        return false;
-    }
-
     /**
      * Calculate if the rescue can be done before the deadline
      *
@@ -560,24 +501,8 @@ public class MyDisasterResponder extends DisasterResponder {
      * @return
      */
     private boolean isPickupWithinDeadline(double oneWayDistance) {
-        if (rescueDurationTicks <= 0) return true;
-        double travelTicks = oneWayDistance / vehicleSpeed;
-        return travelTicks <= rescueDurationTicks;
-    }
-
-    private static long parseLong(String value, long fallback) {
-        try {
-            return Long.parseLong(value.trim());
-        } catch (NumberFormatException | NullPointerException e) {
-            return fallback;
-        }
-    }
-
-    private static double parseDouble(String value, double fallback) {
-        try {
-            return Double.parseDouble(value.trim());
-        } catch (NumberFormatException | NullPointerException e) {
-            return fallback;
-        }
+        if (parameters.getRescueDurationTicks() <= 0) return true;
+        double travelTicks = oneWayDistance / parameters.getVehicleSpeed();
+        return travelTicks <= parameters.getRescueDurationTicks();
     }
 }
