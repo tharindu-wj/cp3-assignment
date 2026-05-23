@@ -10,6 +10,7 @@ import java.util.concurrent.LinkedBlockingQueue;
 /**
  *
  * @author wick0167
+ *
  */
 
 public class DisasterResponderSequential extends DisasterResponder {
@@ -52,13 +53,12 @@ public class DisasterResponderSequential extends DisasterResponder {
         rescueCoordinator = new RescueCoordinator(dynamicStateManager, pathPlanner, simulatorGateway, parameters);
 
         // start the single worker thread processes messages in arrival order
-        worker = new Thread(this::workerLoop, "DisasterResponderSequential-Worker");
+        worker = new Thread(this::workerConsumer, "DisasterResponderSequential-Worker");
         worker.start();
     }
 
     /**
      * Once a Message is received, this method is called with the newly received Message as its parameter
-     * works as the producer within this disaster responder
      *
      * @param s: Message text
      */
@@ -66,7 +66,15 @@ public class DisasterResponderSequential extends DisasterResponder {
     protected void handle(Message s) {
         // queue the received message
         // workerLoop method reads based on the retrival order
-        messageQueue.offer(s.text);
+        workerProducer(s.text);
+    }
+
+    /**
+     * works as the producer within this disaster responder
+     * @param text
+     */
+    private void workerProducer(String text){
+        messageQueue.offer(text);
     }
 
     /**
@@ -76,7 +84,7 @@ public class DisasterResponderSequential extends DisasterResponder {
      *
      * works as the consumer within this disaster responder
      */
-    private void workerLoop() {
+    private void workerConsumer() {
         while (!Thread.currentThread().isInterrupted()) {
             String text;
             try {
@@ -87,6 +95,20 @@ public class DisasterResponderSequential extends DisasterResponder {
             }
             route(text);
         }
+    }
+
+    /**
+     * override base shutdown to interrupt ongoing threads
+     */
+    @Override
+    public void shutdown() {
+        // stop the worker thread when simulator shutdown
+        if (worker != null) {
+            worker.interrupt();
+        }
+
+        // call base class actions
+        super.shutdown();
     }
 
     /**
@@ -261,19 +283,5 @@ public class DisasterResponderSequential extends DisasterResponder {
         // reason = NON_EXISTENT
         String[] parts = text.split("\\|");
         rescueCoordinator.onVehicleDestroyed(Integer.parseInt(parts[1]));
-    }
-
-    /**
-     * override base shutdown to interrupt ongoing threads
-     */
-    @Override
-    public void shutdown() {
-        // stop the worker thread when simulator shutdown
-        if (worker != null) {
-            worker.interrupt();
-        }
-
-        // call base class actions
-        super.shutdown();
     }
 }
