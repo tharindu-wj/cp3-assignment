@@ -68,7 +68,6 @@ public class RescueCoordinator {
 
         synchronized (vehicle) {
             vehicle.currentLocation = from;
-            vehicle.isIdle = true;
             vehicle.isAwaitingHalt = false;
         }
 
