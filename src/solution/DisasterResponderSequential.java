@@ -4,8 +4,6 @@ import org.jdom2.JDOMException;
 import sim.Message;
 
 import java.io.IOException;
-import java.util.concurrent.BlockingQueue;
-import java.util.concurrent.LinkedBlockingQueue;
 
 /**
  *
@@ -15,13 +13,6 @@ import java.util.concurrent.LinkedBlockingQueue;
 
 public class DisasterResponderSequential extends DisasterResponder {
     private volatile RescueCoordinator rescueCoordinator;
-
-    // this queue holds all the messages received from the simulator
-    // workerLoop() method reads them according to the retrieval order
-    private final BlockingQueue<String> messageQueue = new LinkedBlockingQueue<>();
-
-    //
-    private Thread worker;
 
     @Override
     protected void setup() {
@@ -51,10 +42,6 @@ public class DisasterResponderSequential extends DisasterResponder {
 
         //
         rescueCoordinator = new RescueCoordinator(dynamicStateManager, pathPlanner, simulatorGateway, parameters);
-
-        // start the single worker thread processes messages in arrival order
-        worker = new Thread(this::workerConsumer, "DisasterResponderSequential-Worker");
-        worker.start();
     }
 
     /**
@@ -64,51 +51,7 @@ public class DisasterResponderSequential extends DisasterResponder {
      */
     @Override
     protected void handle(Message s) {
-        // queue the received message
-        // workerLoop method reads based on the retrival order
-        workerProducer(s.text);
-    }
-
-    /**
-     * works as the producer within this disaster responder
-     * @param text
-     */
-    private void workerProducer(String text){
-        messageQueue.offer(text);
-    }
-
-    /**
-     * method for worker running until the shut down the simulator
-     * take messages from the queue and then route to the relavant action
-     * this would offload all complex calculations from the main program
-     *
-     * works as the consumer within this disaster responder
-     */
-    private void workerConsumer() {
-        while (!Thread.currentThread().isInterrupted()) {
-            String text;
-            try {
-                text = messageQueue.take();
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-                break;
-            }
-            route(text);
-        }
-    }
-
-    /**
-     * override base shutdown to interrupt ongoing threads
-     */
-    @Override
-    public void shutdown() {
-        // stop the worker thread when simulator shutdown
-        if (worker != null) {
-            worker.interrupt();
-        }
-
-        // call base class actions
-        super.shutdown();
+        executor.submit(() -> route(s.text));
     }
 
     /**
