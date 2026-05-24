@@ -34,7 +34,7 @@ public class MyDisasterResponderAbstract extends DisasterResponder {
         DynamicStateManager dynamicStateManager = new DynamicStateManager(graph, parameters);
 
         //
-        PathFinder pathFinder = new PathFinderDijkstra(graph);
+        PathFinder pathFinder = createPathFinder(graph, parameters);
         PathPlanner pathPlanner = new PathPlanner(pathFinder, parameters.getBaseLocation());
 
         // intilaise outbound message gateway
@@ -45,13 +45,30 @@ public class MyDisasterResponderAbstract extends DisasterResponder {
     }
 
     /**
+     * Create ParhFinder class based on the configuration
+     * @param graph
+     * @param parameters
+     * @return
+     */
+    private PathFinder createPathFinder(Graph graph, SimulatorStaticParameters parameters) {
+        switch (parameters.getPathFinderAlgorithm()) {
+            case "ALT":
+                return new PathFinderAStarALT(graph, parameters.getAltLandmarks(), true);
+            // case "FLOYD":
+            case "DIJKSTRA":
+                return new PathFinderDijkstra(graph);
+            default:
+                throw new IllegalArgumentException("Invalid PATHFINDER in configuration");
+        }
+    }
+
+    /**
      * Once a Message is received, this method is called with the newly received Message as its parameter
      *
      * @param s: Message text
      */
     @Override
     protected void handle(Message s) {
-        executor.submit(() -> worker(s.text));
     }
 
     /**

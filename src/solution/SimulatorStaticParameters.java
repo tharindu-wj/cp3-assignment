@@ -14,13 +14,17 @@ public class SimulatorStaticParameters {
     private final int numberOfVehicles;
     private final long rescueDurationTicks;
     private final double vehicleSpeed;
+    private final String pathFinderAlgorithm;
+    private final int altLandmarks;
 
-    private SimulatorStaticParameters(String mapFile, String base, int numberOfVehicles, long rescueDurationTicks, double vehicleSpeed) {
+    private SimulatorStaticParameters(String mapFile, String base, int numberOfVehicles, long rescueDurationTicks, double vehicleSpeed, String pathFinderAlgorithm, int altLandmarks) {
         this.mapFile = mapFile;
         this.base = base;
         this.numberOfVehicles = numberOfVehicles;
         this.rescueDurationTicks = rescueDurationTicks;
         this.vehicleSpeed = vehicleSpeed;
+        this.pathFinderAlgorithm = pathFinderAlgorithm;
+        this.altLandmarks = altLandmarks;
     }
 
     // build parameters from the config
@@ -33,7 +37,10 @@ public class SimulatorStaticParameters {
         long rescueDurationTicks = parseLong(cfg.getProperty("RESCUE_DURATION", "0"), 0) * 1000L;
         double vehicleSpeed = parseDouble(cfg.getProperty("VEHICLE_SPEED", "0.2"), 0.2);
 
-        return new SimulatorStaticParameters(mapFile, base, numberOfVehicles, rescueDurationTicks, vehicleSpeed);
+        String pathFinderAlgorithm = cfg.getProperty("PATHFINDER", "DIJKSTRA").trim().toUpperCase();
+        int altLandmarks = (int) parseLong(cfg.getProperty("ALT_LANDMARKS", "4"), 4);
+
+        return new SimulatorStaticParameters(mapFile, base, numberOfVehicles, rescueDurationTicks, vehicleSpeed, pathFinderAlgorithm, altLandmarks);
     }
 
     public String getMapFile() {
@@ -54,6 +61,16 @@ public class SimulatorStaticParameters {
 
     public double getVehicleSpeed() {
         return vehicleSpeed;
+    }
+
+    // return PathFinder algorithm from: DIJKSTRA | ALT | FLOYD
+    public String getPathFinderAlgorithm() {
+        return pathFinderAlgorithm;
+    }
+
+    // number of landmarks for the ALT pathfinder algoruthm
+    public int getAltLandmarks() {
+        return altLandmarks;
     }
 
     private static long parseLong(String value, long fallback) {
