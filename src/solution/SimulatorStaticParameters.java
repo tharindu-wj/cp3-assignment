@@ -37,8 +37,8 @@ public class SimulatorStaticParameters {
         long rescueDurationTicks = parseLong(cfg.getProperty("RESCUE_DURATION", "0"), 0) * 1000L;
         double vehicleSpeed = parseDouble(cfg.getProperty("VEHICLE_SPEED", "0.2"), 0.2);
 
-        String pathFinderAlgorithm = cfg.getProperty("PATHFINDER", "DIJKSTRA").trim().toUpperCase();
-        int altLandmarks = (int) parseLong(cfg.getProperty("ALT_LANDMARKS", "4"), 4);
+        String pathFinderAlgorithm = cfg.getProperty("PATHFINDER").trim().toUpperCase();
+        int altLandmarks = (int) parseLong(cfg.getProperty("ALT_LANDMARKS"), 16);
 
         return new SimulatorStaticParameters(mapFile, base, numberOfVehicles, rescueDurationTicks, vehicleSpeed, pathFinderAlgorithm, altLandmarks);
     }

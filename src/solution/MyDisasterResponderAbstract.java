@@ -54,7 +54,8 @@ public class MyDisasterResponderAbstract extends DisasterResponder {
         switch (parameters.getPathFinderAlgorithm()) {
             case "ALT":
                 return new PathFinderAStarALT(graph, parameters.getAltLandmarks(), true);
-            // case "FLOYD":
+            case "FLOYD":
+                return new PathFinderFloydWarshall(graph);
             case "DIJKSTRA":
                 return new PathFinderDijkstra(graph);
             default:
