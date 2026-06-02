@@ -16,7 +16,8 @@ import java.util.concurrent.Executors;
 public class MyDisasterResponderWithMultipleExecutors extends MyDisasterResponderAbstract {
     private volatile RescueCoordinator rescueCoordinator;
 
-    private final int threadExecutorCount = Math.max(1, Math.min(Runtime.getRuntime().availableProcessors(), 4));
+//    private final int threadExecutorCount = Math.max(1, Math.min(Runtime.getRuntime().availableProcessors(), 4));
+    private final int threadExecutorCount = 20; // used fixed count to get same result across different computers
 
     private final ExecutorService[] threadExecutors = newThreadExecutors(threadExecutorCount);
 
@@ -32,6 +33,8 @@ public class MyDisasterResponderWithMultipleExecutors extends MyDisasterResponde
 
         int vehicleNo = extractVehicleId(text);
 
+        // use multiple threads to handle each vehicle related events concurrently
+        // this ensures, no concurrent events processed for single vehicle
         if (vehicleNo >= 0) {
             threadExecutors[vehicleNo % threadExecutorCount].submit(() -> worker(text));
         } else {
