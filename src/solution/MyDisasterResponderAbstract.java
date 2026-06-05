@@ -4,6 +4,8 @@ import org.jdom2.JDOMException;
 import sim.Message;
 
 import java.io.IOException;
+import java.lang.management.ManagementFactory;
+import java.lang.management.MemoryType;
 
 /**
  *
@@ -244,5 +246,25 @@ public class MyDisasterResponderAbstract extends DisasterResponder {
         // reason = NON_EXISTENT
         String[] parts = text.split("\\|");
         rescueCoordinator.onVehicleDestroyed(Integer.parseInt(parts[1]));
+    }
+
+    // override shutdown method to log heap meomory
+    @Override
+    public void shutdown() {
+        System.gc();
+        try {
+            Thread.sleep(150);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+
+        System.gc();
+
+        Runtime rt = Runtime.getRuntime();
+
+        long usedMb = (rt.totalMemory() - rt.freeMemory()) / (1024 * 1024);
+        System.out.println("Benchmark retained heap MB=" + usedMb);
+
+        super.shutdown();
     }
 }
