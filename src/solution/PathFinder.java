@@ -3,6 +3,8 @@ package solution;
 import java.util.List;
 
 /**
+ * @author wick0167
+ *
  * Interface for shortest path finding algorithms
  */
 

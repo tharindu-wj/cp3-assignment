@@ -4,6 +4,8 @@ import java.util.*;
 
 /**
  * Find shortest paths using A* with the ALT (A* + Landmarks + Triangle Inequality) algorithm
+ * Followed below implimentation and applied some logics into this class:
+ * https://github.com/jgrapht/jgrapht/blob/master/jgrapht-core/src/main/java/org/jgrapht/alg/shortestpath/ALTAdmissibleHeuristic.java
  *
  * @author wick0167
  */

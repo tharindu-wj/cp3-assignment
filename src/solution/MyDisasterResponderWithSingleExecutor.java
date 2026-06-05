@@ -9,6 +9,7 @@ import java.io.IOException;
  *
  * @author wick0167
  *
+ * Responder calss offloades complex computations from communication thread to a different single thread
  */
 
 public class MyDisasterResponderWithSingleExecutor extends MyDisasterResponderAbstract {

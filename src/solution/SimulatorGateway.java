@@ -6,6 +6,8 @@ import java.util.List;
 import java.util.concurrent.BlockingQueue;
 
 /**
+ * @author wick0167
+ *
  * Handle outbound requests to the simulator
  */
 

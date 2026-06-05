@@ -11,6 +11,8 @@ import java.util.concurrent.Executors;
  *
  * @author wick0167
  *
+ * Responder class with multiple threads that execute concurrently
+ * Each vehicle has their own thread
  */
 
 public class MyDisasterResponderWithMultipleExecutors extends MyDisasterResponderAbstract {

@@ -2,6 +2,10 @@ package solution;
 
 import java.util.List;
 
+/**
+ * @author wick0167
+ */
+
 public class VehicleState {
     final int id;
     boolean isIdle = true;

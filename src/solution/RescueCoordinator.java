@@ -4,7 +4,9 @@ import java.util.List;
 import java.util.concurrent.locks.ReentrantLock;
 
 /**
+ * @author wick0167
  *
+ * Cordinate downstream componants according to the incoming message
  */
 
 public class RescueCoordinator {

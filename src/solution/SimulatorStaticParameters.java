@@ -5,6 +5,8 @@ import util.ConfigurationInfo;
 import java.util.Properties;
 
 /**
+ * @author wick0167
+ *
  * Access static parameters from the simulator
  */
 

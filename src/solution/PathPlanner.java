@@ -3,6 +3,12 @@ package solution;
 import java.util.ArrayList;
 import java.util.List;
 
+/**
+ * Class for route planning
+ *
+ * @author wick0167
+ */
+
 public class PathPlanner {
     private final PathFinder pathFinder;
     private final String base;
