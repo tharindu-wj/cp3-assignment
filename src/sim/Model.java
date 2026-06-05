@@ -62,7 +62,7 @@ class Model {
         }
 //        if (level > 2) {
 //            try {
-//                Pair<Graph, List<Edge>> p = corruptCopy(roadModel,damage);
+//                Pair<Graph, List<GraphEdge>> p = corruptCopy(roadModel,damage);
 //                corruptedGraph = p.first();
 //                corruptedEdges = p.second();
 //            } catch (Exception e) {

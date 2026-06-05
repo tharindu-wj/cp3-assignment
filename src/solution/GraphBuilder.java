@@ -8,7 +8,7 @@ import java.util.List;
 
 /**
  *
- * @author lewi0146, leib0006
+ * @author lewi0146, leib0006, wick0167
  */
 public class GraphBuilder {
 
@@ -33,6 +33,7 @@ public class GraphBuilder {
         for (Element e: nodes) {
             String id = e.getAttribute("id").getValue();
             // do something here?
+            g.addNode(id); // // add nodes to Graph instance
         }
 
         List<Element> edges = graph.getChildren("edge", ns);
@@ -47,6 +48,7 @@ public class GraphBuilder {
                 if (d.getAttribute("key").getValue().equals("d1")) {
                     double dist = Double.parseDouble(d.getText());
                     // what could you add here?
+                    g.addEdge(String.valueOf(nS), String.valueOf(nD), dist);
                 }
             }
         }
